@@ -469,26 +469,28 @@ def main():
     
     runShifts *= 1000
     runDevs *= 1000
-    plt.errorbar(runBs, runShifts, yerr = runDevs, marker = 'o', linewidth = 0, elinewidth=1)
+    plt.errorbar(runBs, runShifts, yerr = runDevs, marker = 'o', linewidth = 0, elinewidth=1, capsize=2)
     xs = np.linspace(min(runBs), max(runBs))
     ys = np.ones(len(xs))*poptV[0]
     for i in range(NEO[-2], len(poptV)):
         ys += poptV[i]*np.power(xs, i - NEO[-2] + 1)
     ys *= 1000
     plt.plot(xs, ys)
+    plt.ylabel('Shift in f_{0} (mHz)')
+    plt.xlabel('Magnetic Field (T)')
     plt.show()
     
     preds = np.ones(len(runBs))*poptV[0]
     for i in range(NEO[-2], len(poptV)):
         preds += poptV[i]*np.power(runBs, i - NEO[-2] + 1)
     preds *= 1000
-    plt.errorbar(runBs, runShifts - preds, yerr = runDevs, marker = 'o', linewidth = 0, elinewidth=1)
+    plt.errorbar(runBs, runShifts - preds, yerr = runDevs, marker = 'o', linewidth = 0, elinewidth=1, capsize=2)
     plt.plot(runBs, np.zeros(len(runBs)))
     plt.ylabel('Fit Residual (mHz)')
     plt.xlabel('Magnetic Field (T)')
     plt.show()
     
-    plt.errorbar(runInds, runShifts - preds, yerr = runDevs, marker = 'o', linewidth = 0, elinewidth=1)
+    plt.errorbar(runInds, runShifts - preds, yerr = runDevs, marker = 'o', linewidth = 0, elinewidth=1, capsize=2)
     plt.plot(runInds, np.zeros(len(runInds)))
     plt.ylabel('Fit Residual (mHz)')
     plt.xlabel('Run Index')
@@ -502,7 +504,7 @@ def main():
         else:
             eYs += poptV[i]*np.power(xs, i - NEO[-2] + 1)
     eYs = 1000*eYs
-    plt.errorbar(runBs, ErunShifts, yerr = runDevs, marker = 'o', linewidth = 0, elinewidth=1)
+    plt.errorbar(runBs, ErunShifts, yerr = runDevs, marker = 'o', linewidth = 0, elinewidth=1, capsize=2)
     plt.plot(xs, eYs)
     plt.ylabel('Even Component of Fit (mHz)')
     plt.xlabel('Magnetic Field (T)')
@@ -523,10 +525,10 @@ def main():
     avgVal = avgVal/weight
     sigm = 1/np.sqrt(weight)
     
-    # plt.errorbar(allBs, avgVal, yerr = sigm, marker = 'o', linewidth = 0, elinewidth=1)
-    # plt.ylabel('Data (mHz)')
-    # plt.xlabel('Magnetic Field (T)')
-    # plt.show()
+    plt.errorbar(allBs, avgVal, yerr = sigm, marker = 'o', linewidth = 0, elinewidth=1, capsize=2)
+    plt.ylabel('Data (mHz)')
+    plt.xlabel('Magnetic Field (T)')
+    plt.show()
     
     eBs = np.zeros(0)
     eaV = np.zeros(0)
@@ -559,7 +561,7 @@ def main():
     print(np.sqrt(np.diag(pcovE)))
     print('Even Fit Parameters in Std Dev')
     print(pE/np.sqrt(np.diag(pcovE)))
-    plt.errorbar(eBs, eaV, yerr = eSig, marker = 'o', linewidth = 0, elinewidth=1)
+    plt.errorbar(eBs, eaV, yerr = eSig, marker = 'o', linewidth = 0, elinewidth=1, capsize=2)
     plt.plot(EFs, FE)
     plt.ylabel('Even Data (mHz)')
     plt.xlabel('Magnetic Field (T)')
