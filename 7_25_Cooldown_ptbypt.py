@@ -11,7 +11,7 @@ def main():
     
     Fdat = np.loadtxt(fname, delimiter="\t")
     F2 = np.loadtxt(f2, delimiter="\t")
-    startcut = 170
+    startcut = 50
     cutEnd = True
     if(cutEnd):
         #Two endcuts have been used. 5600 gives you more or less the whole file
