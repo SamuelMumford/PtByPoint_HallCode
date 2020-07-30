@@ -285,31 +285,41 @@ def main():
     #without the messy offsets
     leftover =  freqs - wrapper(RunData, *popt2)
     #Make a smoothed version of the residual/v-dependent part
+    def secAvg(left, Bs):
+        sa = np.zeros(0)
+        startIndex = 0
+        for i in range(0, len(Bs)-1):
+            if(Bs[i] != Bs[i+1]):
+                sa = np.append(sa, np.mean(left[startIndex:i+1])*np.ones(len(left[startIndex:i+1])))
+                startIndex = i+1
+        sa = np.append(sa, np.mean(left[startIndex:])*np.ones(len(left[startIndex:])))
+        return sa
+    secA = secAvg(leftover, Bs)
     size = 21
-    sm = signal.savgol_filter(leftover, size, 1)
+    sm = signal.savgol_filter(leftover - secA, size, 1)
     
     #Uncomment this if you want to see plots of how well our fits for f0 are doing
     #without accounting for V. I used this to justify cutting out run 17.
     plt.plot(runs, leftover)
     size0 = 1
-    plt.plot([min(runs), max(runs)], [.002/np.sqrt(size0), .002/np.sqrt(size0)], 'y')
-    plt.plot([min(runs), max(runs)], [-.002/np.sqrt(size0), -.002/np.sqrt(size0)], 'y')
-    plt.plot([min(runs), max(runs)], [.004/np.sqrt(size0), .004/np.sqrt(size0)], 'r')
-    plt.plot([min(runs), max(runs)], [-.004/np.sqrt(size0), -.004/np.sqrt(size0)], 'r')
+    plt.plot([min(runs), max(runs)], [.002, .002], 'y')
+    plt.plot([min(runs), max(runs)], [-.002, -.002], 'y')
+    plt.plot([min(runs), max(runs)], [.004, .004], 'r')
+    plt.plot([min(runs), max(runs)], [-.004, -.004], 'r')
     plt.ylabel("Frequency Fit Residual")
     plt.show()
-    plt.plot(runs, sm)
-    plt.plot([min(runs), max(runs)], [.002/np.sqrt(size), .002/np.sqrt(size)], 'y')
-    plt.plot([min(runs), max(runs)], [-.002/np.sqrt(size), -.002/np.sqrt(size)], 'y')
-    plt.plot([min(runs), max(runs)], [.004/np.sqrt(size), .004/np.sqrt(size)], 'r')
-    plt.plot([min(runs), max(runs)], [-.004/np.sqrt(size), -.004/np.sqrt(size)], 'r')
+    plt.plot(runs, leftover - secA - sm)
+    plt.plot([min(runs), max(runs)], [.002, .002], 'y')
+    plt.plot([min(runs), max(runs)], [-.002, -.002], 'y')
+    plt.plot([min(runs), max(runs)], [.004, .004], 'r')
+    plt.plot([min(runs), max(runs)], [-.004, -.004], 'r')
     plt.show()
     
     #Decide if you want to subtract off offsets in the leftover data as you know any
     #linear in V terms will avearge out to 0
     ZeroOut = True
     if(ZeroOut):
-        leftover = leftover - sm
+        leftover = leftover - secA - sm
         
     # a = 2040
     # b = 2375
@@ -344,6 +354,12 @@ def main():
         Bs = Bs[mask]
         EO = EO[mask]
         runs = runs[mask]
+        plt.plot(runs, leftover)
+        plt.plot([min(runs), max(runs)], [.002, .002], 'y')
+        plt.plot([min(runs), max(runs)], [-.002, -.002], 'y')
+        plt.plot([min(runs), max(runs)], [.004, .004], 'r')
+        plt.plot([min(runs), max(runs)], [-.004, -.004], 'r')
+        plt.show()
         distStart = np.sqrt(leftover**2)
         smDist = np.sqrt(signal.savgol_filter(leftover**2, size2, 1))
         #Uncomment if you want to see how many points we are cutting out
