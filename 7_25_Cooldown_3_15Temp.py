@@ -2,24 +2,25 @@ import numpy as np
 from scipy.optimize import curve_fit
 from scipy import signal
 import matplotlib.pyplot as plt
+plt.style.use('default')
 
 def main():
     
     #Read in the file
-    fname = 'C:/Users/sammy/Downloads/Edited_cooldown_all_8_16_20.txt'
-    f2 = 'C:/Users/sammy/Downloads/Edited_cooldown_all_8_16_20L.txt'
+    fname = 'C:/Users/sammy/Downloads/Edited_cooldown_all_7_25.txt'
+    f2 = 'C:/Users/sammy/Downloads/Edited_cooldown_all_7_25L.txt'
     fB = 'C:/Users/sammy/Downloads/3_15_20_edit.txt'
     
     Fdat = np.loadtxt(fname, delimiter="\t")
     F2 = np.loadtxt(f2, delimiter="\t")
     FdatB = np.loadtxt(fB, delimiter="\t")
-    startcut = 150
-    cutEnd = False
+    startcut = 50
+    cutEnd = True
     if(cutEnd):
         #Two endcuts have been used. 5600 gives you more or less the whole file
         #Before the temperature gets out of hand. 4520 is all the data before
         #the .2K rise
-        endcut = 5600
+        endcut = -70
         freqs = Fdat[startcut:endcut, 2]
         runs = Fdat[startcut:endcut, 3]
         temps = Fdat[startcut:endcut, 4]
@@ -60,7 +61,7 @@ def main():
     DelOutliersTemp = False
     #We may or may not want to use those different-temperature data points in the 
     #full analysis. I still cut them out, it doesn't make a real difference now though
-    DelOutliersFit = True
+    DelOutliersFit = False
     #If you're cutting out data sections, enter this loop
     if(DelOutliersFit):
         #Run 17 is the weird run f
@@ -152,7 +153,6 @@ def main():
     tstartCut = 170
     #Find that index in the data arrays
     place = np.where(runsTemp == tendCut)[0]
-    print(runsTemp)
     #Keep only data before the cutoff index
     pT[BOrd] = np.mean(tempsTemp[tstartCut:place[0]])
     #Stack the runs and B data so that it can be passed as one variable to the fit function
@@ -162,7 +162,12 @@ def main():
     popt, pcov = curve_fit(lambda RandB, *pT: wrapT(RandB, *pT), RandB, tempsTemp[tstartCut:place[0]], p0=pT)
     #if you want to see fit results for temperature, uncomment here
 #    print(popt)
-#    print(popt/np.sqrt(np.diag(pcov
+#    print(popt/np.sqrt(np.diag(pcov)))
+    plt.plot(runsTemp[tstartCut:place[0]], tempsTemp[tstartCut:place[0]])
+    plt.plot(runsTemp[tstartCut:place[0]], wrapT(RandB, *popt))
+    plt.xlabel('Run Index')
+    plt.ylabel('Temperature Reading')
+    plt.show()
     
     #In order to get the true temperature, we need to subtract off the magnetic 
     #field part. So define a parameter array where the run-dependent fit parts are 0
@@ -170,6 +175,12 @@ def main():
     pSub = np.zeros(len(pT))
     pSub[:BOrd] = popt[:BOrd]
     
+    #If you want to see the true temperature, uncomment this
+    trueTsSub = tempsTemp[tstartCut:place[0]] - wrapT(RandB, *pSub)
+    plt.plot(runsTemp[tstartCut:place[0]], trueTsSub)
+    plt.xlabel('Run Index')
+    plt.ylabel('Actual Temperature')
+    plt.show()
     
     #I made a fit for f0 as a function of temperature, Q, and magnetic field.
     #In retrospect, somewhat unnecessary, but it works and helps with later smoothing
@@ -180,10 +191,7 @@ def main():
     TandBFull = np.vstack((runs, Bs)).T
     trueTs = temps - wrapT(TandBFull, *pSub)
     #Define the data for f0 fitting
-    tdiff = np.gradient(trueTs, 1)
-    
-    plt.plot(runs, trueTs)
-    plt.show()
+    #tdiff = np.gradient(trueTs, 1)
     
     def tdmaker(Bs, trueTs):
         td = np.zeros(0)
@@ -196,6 +204,8 @@ def main():
         return td
     
     tdiff = tdmaker(Bs, trueTs)
+    plt.plot(tdiff)
+    plt.show()
     
     RunData = np.vstack((runs, trueTs, Q, Bs, tdiff)).T
     #Define order of polynomial fits. NBSigm must be 2, others can be changed to anything
@@ -494,7 +504,7 @@ def main():
         ys += poptV[i]*np.power(xs, i - NEO[-2] + 1)
     ys *= 1000
     plt.plot(xs, ys)
-    plt.ylabel('Shift in f_{0} (mHz)')
+    plt.ylabel('Shift in  (mHz)')
     plt.xlabel('Magnetic Field (T)')
     plt.show()
     
@@ -515,7 +525,7 @@ def main():
     plt.show()
     
     eYs = np.ones(len(xs))*poptV[0]
-    ErunShifts = np.copy(runShifts)
+    ErunShifts = runShifts
     for i in range(NEO[-2], len(poptV)):
         if((i - NEO[-2] + 1)%2 == 1):
             ErunShifts -= 1000*poptV[i]*np.power(runBs, i - NEO[-2] + 1)
@@ -544,7 +554,6 @@ def main():
     sigm = 1/np.sqrt(weight)
     
     plt.errorbar(allBs, avgVal, yerr = sigm, marker = 'o', linewidth = 0, elinewidth=1, capsize=2)
-    plt.plot(xs, ys)
     plt.ylabel('Data (mHz)')
     plt.xlabel('Magnetic Field (T)')
     plt.show()
@@ -568,23 +577,11 @@ def main():
             eVar[b] += sigm[i]**2/4
     eSig = np.sqrt(eVar)
     
-    def ffE(x, a, b):
-        return a + b*x**2
-    
-    def fE(x, a):
-        return a*np.ones(len(x))
-    p0 = [.56, 0]
-    pE, pcovE = curve_fit(ffE, eBs, eaV, p0 = p0, sigma = eSig)
-    pEBase, pcovEbase = curve_fit(fE, eBs, eaV, p0 = [.56], sigma = eSig)
+    def ffE(x, b):
+        return b*x**2
+    pE, pcovE = curve_fit(ffE, eBs, eaV, p0 = [0], sigma = eSig)
     EFs = np.linspace(0, max(eBs), 100)
-    FE = ffE(EFs, pE[0], pE[1])
-    FE2 = fE(EFs, .56)
-    preds = ffE(eBs, pE[0], pE[1])
-    diff = (preds - eaV)/eSig
-    print(np.mean(np.abs(diff)))
-    preds = fE(eBs, pEBase[0])
-    diff = (preds - eaV)/eSig
-    print(np.mean(np.abs(diff)))
+    FE = ffE(EFs, pE[0])
     
     print('Even Fit Parameters')
     print(pE)
@@ -594,7 +591,6 @@ def main():
     print(pE/np.sqrt(np.diag(pcovE)))
     plt.errorbar(eBs, eaV, yerr = eSig, marker = 'o', linewidth = 0, elinewidth=1, capsize=2)
     plt.plot(EFs, FE)
-    #plt.plot(EFs, FE2)
     plt.ylabel('Even Data (mHz)')
     plt.xlabel('Magnetic Field (T)')
     plt.show()
