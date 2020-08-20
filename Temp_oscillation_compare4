@@ -1,0 +1,179 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Aug 19 10:14:43 2020
+
+@author: tiffanypaul
+"""
+
+
+import numpy as np
+from scipy.optimize import curve_fit
+from scipy import signal
+import matplotlib.pyplot as plt
+
+fname = ['/Users/tiffanypaul/Desktop/GitHub_Files/PtByPoint_HallCode/3_15_20_edit.txt', 
+         '/Users/tiffanypaul/Desktop/GitHub_Files/PtByPoint_HallCode/Edited_cooldown_all_7_25.txt',
+         '/Users/tiffanypaul/Desktop/GitHub_Files/PtByPoint_HallCode/Edited_cooldown_all_8_16_20.txt']
+
+f = ['/Users/tiffanypaul/Desktop/GitHub_Files/PtByPoint_HallCode/3_15_20_editL.txt', 
+     '/Users/tiffanypaul/Desktop/GitHub_Files/PtByPoint_HallCode/Edited_cooldown_all_7_25L.txt',
+     '/Users/tiffanypaul/Desktop/GitHub_Files/PtByPoint_HallCode/Edited_cooldown_all_8_16_20L.txt']
+
+startcut = [0, 50, 150]
+endcut = [4600, -70, 4500]
+cut = [0.85, 0.85, 0.85]
+datlen = np.zeros(len(fname))
+
+Blist_all = np.zeros(0)
+OscAmp_all = np.zeros(0)
+OscPeriod_all = np.zeros(0)
+
+for h in range(0, len(fname)):
+
+    Fdat1 = np.loadtxt(fname[h], delimiter="\t")
+    F1 = np.loadtxt(f[h], delimiter="\t")
+
+    temp1 = Fdat1[startcut[h]:endcut[h], -2]
+    runs1 = Fdat1[startcut[h]:endcut[h], 3]
+    currs1 = Fdat1[startcut[h]:endcut[h], 5]
+    Bs1 = currs1*.85/5 
+    
+    #Define fit function
+    def sinfit(subruns1, a, b, c, d):
+        return a * np.sin(b*subruns1 + c) + d
+    
+    #Find list of B fields
+    Blist1 = np.zeros(0)
+
+    good = np.zeros(0)
+    
+    startindex = 0
+    sgsize = 1
+    OscAmp = np.zeros(0)
+    OscFreq = np.zeros(0)
+    
+    for i in range(0, len(Bs1)-1):
+
+        if(Bs1[i] != Bs1[i+1]):
+            Blist1 = np.append(Blist1, np.mean(Bs1[startindex:i+1]))
+            skip= 20
+            startindex = startindex + skip
+            subtemp1 = temp1[startindex:(i+1)]
+            subruns1 = runs1[startindex:(i+1)]
+            
+            smooth = signal.savgol_filter(subtemp1, 2*sgsize+1, 1)
+            
+            av = np.zeros(len(subtemp1))
+            av = av + np.mean(subtemp1)
+            
+            zero_cross = np.where(np.diff(np.sign(subtemp1 - av)))[0]
+            
+            switchsign = len(zero_cross)
+            osc = switchsign/2
+            howmanyruns = len(subtemp1)
+            freqguess = osc/howmanyruns
+            
+            p0 = np.zeros(4)
+            p0[0] = (max(subtemp1) - min(subtemp1))/2
+            p0[1] = freqguess*2*np.pi
+            p0[2] = 30
+            p0[3] = np.mean(subtemp1)
+            
+            tfit, tfit_cov = curve_fit(sinfit, subruns1, smooth, p0=p0)
+            
+            OscAmp = np.append(OscAmp, tfit[0])
+            OscFreq = np.append(OscFreq, tfit[1]/(2*np.pi))            
+            
+            tfit_plot = (tfit[0] * np.sin(tfit[1]*subruns1 + tfit[2]) + tfit[3])
+            
+            plt.scatter(subruns1, subtemp1, c = 'blue', s = 2, linewidth = 0)
+            plt.plot(subruns1, smooth, c = 'black')
+            plt.plot(subruns1, tfit_plot, c = 'red')
+            plt.xlabel('Run Index')
+            plt.ylabel('Temperature (K)')
+            plt.title('Temperature vs Run Index')
+            plt.show()
+            
+            fitdif = np.mean(abs(subtemp1 - np.mean(subtemp1)))/abs(tfit[0])
+            good = np.append(good, fitdif)
+            print('fitdif')
+            print(fitdif)
+            startindex = i+1
+            
+    Blist1 = np.append(Blist1, np.mean(Bs1[startindex:]))   
+    
+    startindex = startindex+20
+    
+    subtemp1 = temp1[startindex:i+1]
+    subruns1 = runs1[startindex:i+1]
+    
+    smooth = signal.savgol_filter(subtemp1, 2*sgsize+1, 1)
+    
+    p0 = np.zeros(4)
+    p0[0] = (max(subtemp1) - min(subtemp1))/2
+    p0[1] = 0.3
+    p0[2] = 30
+    p0[3] = np.mean(subtemp1)
+    
+    tfit, tfit_cov = curve_fit(sinfit, subruns1, smooth, p0=p0)
+    
+    OscAmp = np.append(OscAmp, tfit[0])
+    OscFreq = np.append(OscFreq, tfit[1]/(2*np.pi))
+    
+    tfit_plot = (tfit[0] * np.sin(tfit[1]*subruns1 + tfit[2]) + tfit[3])
+    
+    plt.scatter(subruns1, subtemp1, c = 'blue', s = 2, linewidth = 0)
+    plt.plot(subruns1, smooth, c = 'black')
+    plt.plot(subruns1, tfit_plot, c = 'red')
+    plt.xlabel('Run Index')
+    plt.ylabel('Temperature (K)')
+    plt.title('Temperature vs Run Index')
+    plt.show()    
+    
+    fitdif = np.mean(abs(subtemp1 - np.mean(subtemp1)))/abs(tfit[0])
+    print('fitdif')
+    print(fitdif)
+    good = np.append(good, fitdif)
+
+    OscPeriod = 1/OscFreq
+    print('good')
+    print(good)
+    
+    keep = (good<cut[h])
+    print(keep)
+    Blist1 = Blist1[keep]
+
+    OscAmp = OscAmp[keep]
+    OscFreq = OscFreq[keep]
+
+    OscPeriod = OscPeriod[keep]
+    
+    Blist_all = np.hstack((Blist_all, Blist1))
+    OscAmp_all = np.hstack((OscAmp_all, OscAmp))
+    OscPeriod_all = np.hstack((OscPeriod_all, OscPeriod))
+    
+    datlen[h] = len(Blist1)
+
+stop1 = int(datlen[0])
+start2 = int(datlen[0])
+stop2 = int(datlen[0]+datlen[1])
+start3 = int(datlen[0]+datlen[1])
+
+OscAmp1 = OscAmp_all[0:stop1]
+OscAmp2 = OscAmp_all[start2:stop2]
+OscAmp3 = OscAmp_all[start3:]
+
+OscPeriod1 = OscPeriod_all[0:stop1]
+OscPeriod2 = OscPeriod_all[start2:stop2]
+OscPeriod3 = OscPeriod_all[start3:]
+
+plt.scatter(abs(OscAmp1), OscPeriod1, c = 'black', label = '3/15 Cooldown')
+plt.scatter(abs(OscAmp2), OscPeriod2, c = 'red', label = '7/25 Cooldown')
+plt.scatter(abs(OscAmp3), OscPeriod3, c = 'orange', label = '8/16 Cooldown')
+plt.xlabel('Temperature Oscillation Amplitude (K)')
+plt.ylabel('Temperature Oscillation Period (Runs)')
+plt.title('Temperature Oscillation Period vs Amplitude')
+plt.legend()
+#plt.savefig('/Users/tiffanypaul/Desktop/Oscillation_compare.pdf', bbox_inches="tight")
+plt.show()
