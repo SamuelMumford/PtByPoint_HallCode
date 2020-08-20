@@ -1,0 +1,299 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Aug 19 10:14:43 2020
+
+@author: tiffanypaul
+"""
+
+
+import numpy as np
+from scipy.optimize import curve_fit
+from scipy import signal
+import matplotlib.pyplot as plt
+
+fname1 = '/Users/tiffanypaul/Desktop/GitHub_Files/PtByPoint_HallCode/Edited_cooldown_all_8_16_20.txt'
+f1 = '/Users/tiffanypaul/Desktop/GitHub_Files/PtByPoint_HallCode/Edited_cooldown_all_8_16_20L.txt'
+
+
+Fdat1 = np.loadtxt(fname1, delimiter="\t")
+F1 = np.loadtxt(f1, delimiter="\t")
+startcut1 = 150
+endcut1 = 4500
+temp1 = Fdat1[startcut1:endcut1, -2]
+runs1 = Fdat1[startcut1:endcut1, 3]
+currs1 = Fdat1[startcut1:endcut1, 5]
+Bs1 = currs1*.85/5 
+Q1 = F1[startcut1:endcut1, 3]
+Q1 = np.abs(Q1)
+freqs1 = Fdat1[startcut1:endcut1, 2]
+dc1 = Fdat1[startcut1:endcut1, 0]
+amp1 = F1[startcut1:endcut1, 6]
+
+plt.scatter(runs1, temp1, c = 'blue', s = 2, linewidth = 0)
+plt.xlabel('Run Index')
+plt.ylabel('Temperature (K)')
+plt.title('Temperature vs Run Index')
+plt.show()
+
+plt.scatter(runs1, Bs1, c = 'blue', s = 2, linewidth = 0)
+plt.xlabel('Run Index')
+plt.ylabel('Magnetic Field (T)')
+plt.title('Magnetic Field vs Run Index')
+plt.show()
+
+plt.scatter(runs1, Q1, c = 'blue', s = 2, linewidth = 0)
+plt.xlabel('Run Index')
+plt.ylabel('Q')
+plt.title('Q vs Run Index')
+plt.show()
+
+plt.scatter(runs1, freqs1, c = 'blue', s = 2, linewidth = 0)
+plt.xlabel('Run Index')
+plt.ylabel('Resonant Frequency (Hz)')
+plt.title('Resonant Frequency vs Run Index')
+plt.show()
+
+plt.scatter(runs1, dc1, c = 'blue', s = 2, linewidth = 0)
+plt.xlabel('Run Index')
+plt.ylabel('DC Level (V)')
+plt.title('DC Level vs Run Index')
+plt.show()
+
+plt.scatter(runs1, amp1, c = 'blue', s = 2, linewidth = 0)
+plt.xlabel('Run Index')
+plt.ylabel('Cantilever Response Amplitude')
+plt.title('Cantilever Response Amplitude vs Run Index')
+plt.show()
+
+#Define fit function
+def sinfit(subruns1, a, b, c, d):
+    return a * np.sin(b*subruns1 + c) + d
+
+#Find list of B fields
+Blist1 = np.zeros(0)
+Qlist = np.zeros(0)
+freqslist = np.zeros(0)
+dclist = np.zeros(0)
+amplist = np.zeros(0)
+good = np.zeros(0)
+
+startindex = 0
+sgsize = 1
+OscAmp = np.zeros(0)
+OscFreq = np.zeros(0)
+
+for i in range(0, len(Bs1)-1):
+    #tfit = 0
+    #tfit_cov = 0
+    if(Bs1[i] != Bs1[i+1]):
+        Blist1 = np.append(Blist1, np.mean(Bs1[startindex:i+1]))
+        skip= 20
+        startindex = startindex + skip
+        subtemp1 = temp1[startindex:(i+1)]
+        subruns1 = runs1[startindex:(i+1)]
+        subQ1 = Q1[startindex:(i+1)]
+        subfreqs1 = freqs1[startindex:(i+1)]
+        subdc1 = dc1[startindex:(i+1)]
+        subamp1 = amp1[startindex:(i+1)]
+        
+        smooth = signal.savgol_filter(subtemp1, 2*sgsize+1, 1)
+        
+        av = np.zeros(len(subtemp1))
+        av = av + np.mean(subtemp1)
+        
+        #print('av')
+        #print(av)
+        
+        zero_cross = np.where(np.diff(np.sign(subtemp1 - av)))[0]
+        
+        #print('zero_cross')
+        #print(zero_cross)
+        
+        switchsign = len(zero_cross)
+        #print('switchsign')
+        #print(switchsign)
+        
+        osc = switchsign/2
+        #print(osc)
+        howmanyruns = len(subtemp1)
+        #print(howmanyruns)
+        freqguess = osc/howmanyruns
+        #print(freqguess)
+        
+        p0 = np.zeros(4)
+        p0[0] = (max(subtemp1) - min(subtemp1))/2
+        p0[1] = freqguess*2*np.pi
+        #print(p0[0])
+        p0[2] = 30
+        p0[3] = np.mean(subtemp1)
+        
+        tfit, tfit_cov = curve_fit(sinfit, subruns1, smooth, p0=p0)
+        print('Sine function coefficients')
+        print(tfit)
+        print('Covariance of coefficients')
+        print(tfit_cov)
+        
+        OscAmp = np.append(OscAmp, tfit[0])
+        OscFreq = np.append(OscFreq, tfit[1]/(2*np.pi))
+        Qlist = np.append(Qlist, np.mean(subQ1))
+        freqslist = np.append(freqslist, np.mean(subfreqs1))
+        dclist = np.append(dclist, np.mean(subdc1))
+        amplist = np.append(amplist, np.mean(subamp1))
+        
+        
+        tfit_plot = (tfit[0] * np.sin(tfit[1]*subruns1 + tfit[2]) + tfit[3])
+        
+        plt.scatter(subruns1, subtemp1, c = 'blue', s = 2, linewidth = 0)
+        plt.plot(subruns1, smooth, c = 'black')
+        plt.plot(subruns1, tfit_plot, c = 'red')
+        plt.xlabel('Run Index')
+        plt.ylabel('Temperature (K)')
+        plt.title('Temperature vs Run Index')
+        plt.show()
+        
+        fitdif = np.mean(abs(subtemp1 - np.mean(subtemp1)))/abs(tfit[0])
+        good = np.append(good, fitdif)
+        print('fitdif')
+        print(fitdif)
+        startindex = i+1
+        
+Blist1 = np.append(Blist1, np.mean(Bs1[startindex:]))   
+
+startindex = startindex+20
+
+subtemp1 = temp1[startindex:i+1]
+subruns1 = runs1[startindex:i+1]
+subQ1 = Q1[startindex:(i+1)]
+subfreqs1 = freqs1[startindex:(i+1)]
+subdc1 = dc1[startindex:(i+1)]
+subamp1 = amp1[startindex:(i+1)]
+
+smooth = signal.savgol_filter(subtemp1, 2*sgsize+1, 1)
+
+p0 = np.zeros(4)
+p0[0] = (max(subtemp1) - min(subtemp1))/2
+p0[1] = 0.3
+print(p0[0])
+p0[2] = 30
+p0[3] = np.mean(subtemp1)
+
+tfit, tfit_cov = curve_fit(sinfit, subruns1, smooth, p0=p0)
+print('Sine function coefficients')
+print(tfit)
+print('Covariance of coefficients')
+print(tfit_cov)
+
+OscAmp = np.append(OscAmp, tfit[0])
+OscFreq = np.append(OscFreq, tfit[1]/(2*np.pi))
+Qlist = np.append(Qlist, np.mean(subQ1))
+freqslist = np.append(freqslist, np.mean(subfreqs1))
+dclist = np.append(dclist, np.mean(subdc1))
+amplist = np.append(amplist, np.mean(subamp1))
+
+tfit_plot = (tfit[0] * np.sin(tfit[1]*subruns1 + tfit[2]) + tfit[3])
+
+plt.scatter(subruns1, subtemp1, c = 'blue', s = 2, linewidth = 0)
+plt.plot(subruns1, smooth, c = 'black')
+plt.plot(subruns1, tfit_plot, c = 'red')
+plt.xlabel('Run Index')
+plt.ylabel('Temperature (K)')
+plt.title('Temperature vs Run Index')
+plt.show()    
+
+fitdif = np.mean(abs(subtemp1 - np.mean(subtemp1)))/abs(tfit[0])
+print('fitdif')
+print(fitdif)
+good = np.append(good, fitdif)
+
+print(Blist1)
+print(OscAmp)
+print(OscFreq)
+OscPeriod = 1/OscFreq
+print(OscPeriod)
+print('good')
+print(good)
+
+keep = (good<.8)
+print(keep)
+Blist1 = Blist1[keep]
+Qlist = Qlist[keep]
+freqslist = freqslist[keep]
+OscAmp = OscAmp[keep]
+OscFreq = OscFreq[keep]
+dclist = dclist[keep]
+amplist = amplist[keep]
+OscPeriod = OscPeriod[keep]
+
+plt.scatter(Blist1, OscAmp, c = 'black')
+plt.xlabel('Magnetic Field (T)')
+plt.ylabel('Temperature Oscillation Amplitude (K)')
+plt.title('Temperature Oscillation Amplitude vs Magnetic Field')
+plt.show()
+
+plt.scatter(Qlist, OscAmp, c = 'black')
+plt.xlabel('Q')
+plt.ylabel('Temperature Oscillation Amplitude (K)')
+plt.title('Temperature Oscillation Amplitude vs Q')
+plt.show()
+
+plt.scatter(freqslist, OscAmp, c = 'black')
+plt.xlabel('Resonant Frequency (Hz)')
+plt.ylabel('Temperature Oscillation Amplitude (K)')
+plt.title('Temperature Oscillation Amplitude vs Resonant Frequency')
+plt.show()
+
+plt.scatter(dclist, OscAmp, c = 'black')
+plt.xlabel('DC Level (V)')
+plt.ylabel('Temperature Oscillation Amplitude (K)')
+plt.title('Temperature Oscillation Amplitude vs DC Level')
+plt.show()
+
+plt.scatter(amplist, OscAmp, c = 'black')
+plt.xlabel('Cantilever Response Amplitude')
+plt.ylabel('Temperature Oscillation Amplitude (K)')
+plt.title('Temperature Oscillation Amplitude vs Cantilever Response Amplitude')
+plt.show()
+
+#plt.scatter(Blist1, OscFreq, c = 'black')
+#plt.xlabel('Magnetic Field (T)')
+#plt.ylabel('Temperature Oscillation Frequency (Hz)')
+#plt.title('Temperature Oscillation Frequency vs Magnetic Field')
+#plt.show()
+
+plt.scatter(Blist1, OscPeriod, c = 'black')
+plt.xlabel('Magnetic Field (T)')
+plt.ylabel('Temperature Oscillation Period (Runs)')
+plt.title('Temperature Oscillation Period vs Magnetic Field')
+plt.show()
+
+plt.scatter(Qlist, OscPeriod, c = 'black')
+plt.xlabel('Q')
+plt.ylabel('Temperature Oscillation Period (Runs)')
+plt.title('Temperature Oscillation Period vs Q')
+plt.show()
+
+plt.scatter(freqslist, OscPeriod, c = 'black')
+plt.xlabel('Resonant Frequency (Hz)')
+plt.ylabel('Temperature Oscillation Period (Runs)')
+plt.title('Temperature Oscillation Period vs Resonant Frequency')
+plt.show()
+
+plt.scatter(dclist, OscPeriod, c = 'black')
+plt.xlabel('DC level (V)')
+plt.ylabel('Temperature Oscillation Period (Runs)')
+plt.title('Temperature Oscillation Period vs DC Level')
+plt.show()
+
+plt.scatter(amplist, OscPeriod, c = 'black')
+plt.xlabel('Cantilever Response Amplitude')
+plt.ylabel('Temperature Oscillation Period (Runs)')
+plt.title('Temperature Oscillation Period vs Cantilever Response Amplitude')
+plt.show()
+
+plt.scatter(abs(OscAmp), OscPeriod, c = 'black')
+plt.xlabel('Temperature Oscillation Amplitude (K)')
+plt.ylabel('Temperature Oscillation Period (Runs)')
+plt.title('Temperature Oscillation Period vs Amplitude')
+plt.show()
+
