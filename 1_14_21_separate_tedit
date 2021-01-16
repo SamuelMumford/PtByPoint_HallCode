@@ -1,0 +1,335 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Sat Jan 16 10:07:12 2021
+
+@author: tiffanypaul
+"""
+
+
+
+import numpy as np
+from scipy.optimize import curve_fit
+from scipy import signal
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+
+fname = '/Users/tiffanypaul/Desktop/GitHub_Files/1_14_21_cooldown/Cooldown_all_1_14_20_cool.txt'
+f2 = '/Users/tiffanypaul/Desktop/GitHub_Files/1_14_21_cooldown/Cooldown_all_1_14_20_coolL.txt'
+#fname = 'C:/Users/sammy/Downloads/11_5_20_cool1.txt'
+#f2 = 'C:/Users/sammy/Downloads/11_5_20_cool1L.txt'
+
+Fdat = np.loadtxt(fname, delimiter="\t")
+F2 = np.loadtxt(f2, delimiter="\t")
+startcut = 0
+endcut = -5#4481#-40
+keep = True
+#keep = True
+freqs = Fdat[startcut:endcut, 2]
+runs = Fdat[startcut:endcut, 3]
+currs = Fdat[startcut:endcut, 5]
+Q = F2[startcut:endcut, 3]
+Q = np.abs(Q)
+Bs = currs*.875/5
+
+def evensAndOdds(runs):
+    length = int(len(runs))
+    eis = np.ones(length, dtype=bool)
+    ois = np.ones(length, dtype=bool)
+    for i in range(0, len(runs)):
+        if(runs[i]%2 == 0):
+            ois[i] = 0
+        else:
+            eis[i] = 0
+    return eis, ois
+
+def segmentEO(Bs, freqs, runs):
+    start = 0
+    startB = Bs[start]
+    info = []
+    for i in range(0, len(Bs)):
+        if(Bs[i] != startB):
+            subFs = freqs[start:i]
+            subRs = runs[start:i]
+            evens, odds = evensAndOdds(subRs)
+            efs = subFs[evens]
+            ofs = subFs[odds]
+            ers = subRs[evens]
+            ors = subRs[odds]
+            oddPred = np.interp(ors, ers, efs)
+            evenPred = np.interp(ers, ors, ofs)
+            sigE = np.std(evenPred - efs)/np.sqrt(len(ers))
+            sigO = np.std(oddPred - ofs)/np.sqrt(len(ofs))
+            sigtot = np.sqrt(sigE**2 + sigO**2)/2
+            diff = np.mean(ofs -oddPred) - np.mean(efs - evenPred)
+            diff = diff/2
+            info.append([startB, diff, sigtot])
+            
+            startB = Bs[i]
+            start = i
+    subFs = freqs[start:]
+    subRs = runs[start:]
+    evens, odds = evensAndOdds(subRs)
+    efs = subFs[evens]
+    ofs = subFs[odds]
+    ers = subRs[evens]
+    ors = subRs[odds]
+    oddPred = np.interp(ors, ers, efs)
+    evenPred = np.interp(ers, ors, ofs)
+    sigE = np.std(evenPred - efs)/np.sqrt(len(ers))
+    sigO = np.std(oddPred - ofs)/np.sqrt(len(ofs))
+    sigtot = np.sqrt(sigE**2 + sigO**2)/2
+    diff = np.mean(ofs -oddPred) - np.mean(efs - evenPred)
+    diff = diff/2
+    info.append([startB, diff, sigtot])
+    
+    info = np.array(info).reshape(-1, 3).T
+    return info
+
+def consolidate(info):
+    Bs = info[0]
+    Shifts = info[1]
+    Sigs = info[2]
+    Dict = {}
+    for i in range(0, len(Bs)):
+        if(Bs[i] in Dict.keys()):
+            present = Dict[Bs[i]]
+            present[1] = (present[1]/(present[2]**2) + Shifts[i]/(Sigs[i]**2))/(1/(present[2]**2) + 1/(Sigs[i]**2))
+            present[2] = np.sqrt(1/(1/(present[2]**2) + 1/(Sigs[i]**2)))
+        else:
+            Dict[Bs[i]] = [Bs[i], Shifts[i], Sigs[i]]
+    DictList = []
+    for key in Dict:
+        DictList.append(Dict[key])
+    DictList = np.array(DictList).reshape(-1, 3).T
+    return Dict, DictList
+
+def consolidateEven(ShDict):
+    Dict = {}
+    for key in ShDict:
+        if(np.abs(key) not in Dict.keys()):
+            if(-key in ShDict.keys()):
+                if(key== 0):
+                    Dict[key] = ShDict[key]
+                else:
+                    PB = ShDict[np.abs(key)]
+                    MB = ShDict[-np.abs(key)]
+                    sh = (PB[1] + MB[1])/2
+                    sig = np.sqrt(PB[2]**2 + MB[2]**2)/2
+                    Dict[np.abs(key)] = [np.abs(key), sh, sig]
+    DictList = []
+    for key in Dict:
+        DictList.append(Dict[key])
+    DictList = np.array(DictList).reshape(-1, 3).T
+    return Dict, DictList
+
+def consolidateOdd(ShDict):
+    Dict = {}
+    for key in ShDict:
+        if(np.abs(key) not in Dict.keys()):
+            if(-key in ShDict.keys()):
+                if(key!= 0):
+                    PB = ShDict[np.abs(key)]
+                    MB = ShDict[-np.abs(key)]
+                    sh = (PB[1] - MB[1])/2
+                    sig = np.sqrt(PB[2]**2 + MB[2]**2)/2
+                    Dict[np.abs(key)] = [np.abs(key), sh, sig]
+    DictList = []
+    for key in Dict:
+        DictList.append(Dict[key])
+    DictList = np.array(DictList).reshape(-1, 3).T
+    return Dict, DictList
+
+def fit(x,a,b, c, d, e, f, g, h, i): 
+     return a + b*x + c*x**3 + d*x**5 + e*x**7 + f*x**2 + g*x**4 + h*x**6 + i*np.abs(x)
+
+inf = segmentEO(Bs, freqs, runs)
+
+mask = [True]*len(inf[0])
+
+if(not keep):
+    mask[18] = False
+a = inf[0][mask]
+b = inf[1][mask]
+c = inf[2][mask]
+
+info = [a, b, c]
+
+
+#Magnetic field (T)
+Bfield = info[0]
+#Signal in mHz
+signal = 1000*info[1]
+#Error in mHz
+error = 1000*info[2]
+
+#popt,pcov=curve_fit(fit, info[0], info[1], p0=(1,0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), sigma = info[2])
+#print(popt)
+#pltX = np.linspace(np.min(info[0]), np.max(info[0]), 100)
+#pltY = fit(pltX, popt[0], popt[1], popt[2], popt[3], popt[4], popt[5], popt[6], popt[7], popt[8])
+#plt.plot(pltX, 1000*pltY)
+colors = cm.jet(np.linspace(0, 1, len(info[0])))
+for i in range(0, len(info[0])):
+    plt.errorbar(Bfield[i], signal[i], yerr = error[i], marker = '.', linewidth = 0, elinewidth=1, capsize=2, color = colors[i])
+plt.xlabel('Magnetic Field (T)')
+plt.ylabel('$\delta f_{0}(\pm V)$ (mHz)')
+#plt.savefig("1120+2.pdf")
+plt.show()
+
+print(Bfield)
+#print(len(Bfield))
+Bcolor = []
+for i in range(0,len(Bfield)):
+    Bcolor.append('black')
+#print(Bcolor)
+#Blue for points going up from 0 
+#Red for points going down from high field
+    #-4 so we don't change the colors of the last 4 points that were taken at the end 
+for i in range(0, len(Bfield)-4):
+    if np.abs(Bfield[i]) >= np.abs(Bfield[i-1]):
+        Bcolor[i] = 'blue' 
+    if np.abs(Bfield[i]) < np.abs(Bfield[i-1]):
+        Bcolor[i] = 'red'
+#Make first 0 point blue
+Bcolor[0] = 'blue'
+        
+print(Bcolor)
+
+for i in range(0, len(Bfield)):
+    plt.errorbar(Bfield[i], signal[i], yerr = error[i], marker = '.', linewidth = 0, elinewidth=1, capsize=2, color = Bcolor[i])
+plt.xlabel('Magnetic Field (T)')
+plt.ylabel('$\delta f_{0}(\pm V)$ (mHz)')
+#plt.savefig("1120+2.pdf")
+plt.show()
+
+#fields going to higher magnitude fields
+mask_B_high = [True]*len(Bfield)
+#going to lower magnitude fields (towards zero)
+mask_B_low = [True]*len(Bfield)
+
+for i in range(0, len(Bcolor)):
+    if Bcolor[i] != 'blue':
+        mask_B_high[i] = False
+    if Bcolor[i] != 'red':
+        mask_B_low[i] = False
+
+
+B_high = Bfield[mask_B_high]
+B_low = Bfield[mask_B_low]
+signal_high = signal[mask_B_high]
+signal_low = signal[mask_B_low]
+error_high = error[mask_B_high]
+error_low = error[mask_B_low]
+
+for i in range(0, len(B_high)):
+    plt.errorbar(B_high[i], signal_high[i], yerr = error_high[i], marker = '.', linewidth = 0, elinewidth=1, capsize=2, color = 'blue')
+plt.xlabel('Magnetic Field (T)')
+plt.ylabel('$\delta f_{0}(\pm V)$ (mHz)')
+#plt.savefig("1120+2.pdf")
+plt.show()
+
+for i in range(0, len(B_low)):
+    plt.errorbar(B_low[i], signal_low[i], yerr = error_low[i], marker = '.', linewidth = 0, elinewidth=1, capsize=2, color = 'red')
+plt.xlabel('Magnetic Field (T)')
+plt.ylabel('$\delta f_{0}(\pm V)$ (mHz)')
+#plt.savefig("1120+2.pdf")
+plt.show()
+
+
+##############
+
+        
+
+
+popt_high,pcov_high=curve_fit(fit, B_high, signal_high, p0=(1,0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), sigma = error_high)
+print(popt_high)
+pltX_high = np.linspace(np.min(B_high), np.max(B_high), 100)
+pltY_high = fit(pltX_high, popt_high[0], popt_high[1], popt_high[2], popt_high[3], popt_high[4], popt_high[5], popt_high[6], popt_high[7], popt_high[8])
+plt.plot(pltX_high, pltY_high)
+colors = cm.jet(np.linspace(0, 1, len(B_high)))
+for i in range(0, len(B_high)):
+    plt.errorbar(B_high[i], signal_high[i], yerr = error_high[i], marker = '.', linewidth = 0, elinewidth=1, capsize=2, color = 'blue')
+plt.xlabel('Magnetic Field (T)')
+plt.ylabel('$\delta f_{0}(\pm V)$ (mHz)')
+plt.title('Going to Higher Magnitude Magnetic Field')
+#plt.savefig("1120+2.pdf")
+plt.show()
+        
+plt.plot(pltX_high, np.zeros(len(pltX_high)))
+for i in range(0, len(B_high)):
+    plt.errorbar(B_high[i], (signal_high[i] - fit(B_high[i], popt_high[0], popt_high[1], popt_high[2], popt_high[3], popt_high[4], popt_high[5], popt_high[6], popt_high[7], popt_high[8])), yerr = error_high[i], marker = '.', linewidth = 0, elinewidth=1, capsize=2, color = 'blue')
+plt.xlabel('Magnetic Field (T)')
+plt.ylabel('$\delta f_{0}(\pm V)$ Residual (mHz)')
+plt.title('Going to Higher Magnitude Magnetic Field')
+#plt.savefig("1120O_2.pdf")
+plt.show()
+
+    
+popt_low,pcov_low=curve_fit(fit, B_low, signal_low, p0=(1,0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), sigma = error_low)
+print(popt_high)
+pltX_low = np.linspace(np.min(B_low), np.max(B_low), 100)
+pltY_low = fit(pltX_low, popt_low[0], popt_low[1], popt_low[2], popt_low[3], popt_low[4], popt_low[5], popt_low[6], popt_low[7], popt_low[8])
+plt.plot(pltX_low, pltY_low)
+colors_low = cm.jet(np.linspace(0, 1, len(B_low)))
+for i in range(0, len(B_low)):
+    plt.errorbar(B_low[i], signal_low[i], yerr = error_low[i], marker = '.', linewidth = 0, elinewidth=1, capsize=2, color = 'red')
+plt.xlabel('Magnetic Field (T)')
+plt.ylabel('$\delta f_{0}(\pm V)$ (mHz)')
+plt.title('Going to Lower Magnitude Magnetic Field')
+#plt.savefig("1120+2.pdf")
+plt.show()
+        
+plt.plot(pltX_low, np.zeros(len(pltX_low)))
+for i in range(0, len(B_low)):
+    plt.errorbar(B_low[i], (signal_low[i] - fit(B_low[i], popt_low[0], popt_low[1], popt_low[2], popt_low[3], popt_low[4], popt_low[5], popt_low[6], popt_low[7], popt_low[8])), yerr = error_low[i], marker = '.', linewidth = 0, elinewidth=1, capsize=2, color = 'red')
+plt.xlabel('Magnetic Field (T)')
+plt.ylabel('$\delta f_{0}(\pm V)$ Residual (mHz)')
+plt.title('Going to Lower Magnitude Magnetic Field')
+#plt.savefig("1120O_2.pdf")
+plt.show()
+
+plt.plot(pltX_high, pltY_high)
+for i in range(0, len(B_high)):
+    plt.errorbar(B_high[i], signal_high[i], yerr = error_high[i], marker = '.', linewidth = 0, elinewidth=1, capsize=2, color = 'blue')
+plt.plot(pltX_low, pltY_low)
+for i in range(0, len(B_low)):
+    plt.errorbar(B_low[i], signal_low[i], yerr = error_low[i], marker = '.', linewidth = 0, elinewidth=1, capsize=2, color = 'red')
+plt.xlabel('Magnetic Field (T)')
+plt.ylabel('$\delta f_{0}(\pm V)$ (mHz)')
+plt.title('All data with fits')
+#plt.savefig("1120+2.pdf")
+plt.show()
+
+#def fit(x,a,b, c, d, e, f, g, h, i): 
+     #return a + b*x + c*x**3 + d*x**5 + e*x**7 + f*x**2 + g*x**4 + h*x**6 + i*np.abs(x)
+
+plt.plot(pltX_high, pltY_high - (popt_high[0] + pltX_high*popt_high[1] + pltX_high**3*popt_high[2] + pltX_high**5*popt_high[3] + pltX_high**7*popt_high[4]), c = 'blue')
+for i in range(0, len(B_high)):
+    plt.errorbar(B_high[i], (signal_high[i] - fit(B_high[i], popt_high[0], popt_high[1], popt_high[2], popt_high[3], popt_high[4], 0, 0, 0, 0)), yerr = error_high[i], marker = '.', linewidth = 0, elinewidth=1, capsize=2, color = 'blue')
+plt.plot(pltX_low, pltY_low - (popt_low[0] + pltX_low*popt_low[1] + pltX_low**3*popt_low[2] + pltX_low**5*popt_low[3] + pltX_low**7*popt_low[4]), c = 'red')
+for i in range(0, len(B_low)):
+    plt.errorbar(B_low[i], (signal_low[i] - fit(B_low[i], popt_low[0], popt_low[1], popt_low[2], popt_low[3], popt_low[4], 0, 0, 0, 0)), yerr = error_low[i], marker = '.', linewidth = 0, elinewidth=1, capsize=2, color = 'red')
+plt.xlabel('Magnetic Field (T)')
+plt.ylabel('$\delta f_{0}(\pm V)$ (mHz)')
+plt.title('Subtracting off odd components of fit (& offset)')
+#plt.savefig("1120+2.pdf")
+plt.show()
+
+plt.plot(pltX_high, pltY_high - (pltX_high**2*popt_high[5] + pltX_high**4*popt_high[6] + pltX_high**6*popt_high[7] + np.abs(pltX_high)*popt_high[8]))
+for i in range(0, len(B_high)):
+    plt.errorbar(B_high[i], (signal_high[i] - fit(B_high[i], 0, 0, 0, 0, 0, popt_high[5], popt_high[6], popt_high[7], popt_high[8])), yerr = error_high[i], marker = '.', linewidth = 0, elinewidth=1, capsize=2, color = 'blue')
+plt.plot(pltX_low, pltY_low - (pltX_low**2*popt_low[5] + pltX_low**4*popt_low[6] + pltX_low**6*popt_low[7] + np.abs(pltX_low)*popt_low[8]))
+for i in range(0, len(B_low)):
+    plt.errorbar(B_low[i], (signal_low[i] - fit(B_low[i], 0, 0, 0, 0, 0, popt_low[5], popt_low[6], popt_low[7], popt_low[8])), yerr = error_low[i], marker = '.', linewidth = 0, elinewidth=1, capsize=2, color = 'red')
+plt.xlabel('Magnetic Field (T)')
+plt.ylabel('$\delta f_{0}(\pm V)$ (mHz)')
+plt.title('Subtracting off even components of fit')
+#plt.savefig("1120+2.pdf")
+plt.show()
+
+
+
+
+
+
+
