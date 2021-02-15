@@ -17,10 +17,13 @@ f1118 = 'C:/Users/sammy/Downloads/Cooldown_all_11_18_20_cool.txt'
 f1118L = 'C:/Users/sammy/Downloads/Cooldown_all_11_18_20_coolL.txt'
 f114 = 'C:/Users/sammy/Downloads/Cooldown_all_1_14_20_cool.txt'
 f114L = 'C:/Users/sammy/Downloads/Cooldown_all_1_14_20_coolL.txt'
+#f114 = 'C:/Users/sammy/Downloads/2_10_21cool2.txt'
+#f114L = 'C:/Users/sammy/Downloads/2_10_21cool2L.txt'
 
 name1 = '4kOhm, 12/9'#'12/9/20'
 name2 = '4kOhm, 11/18'#'11/18/20'
 name3 = '2kOhm, 1/14'#'1/14/21'
+#name3 = '.6kOhm, 2/11'
 
 Fdat = np.loadtxt(f129, delimiter="\t")
 F2 = np.loadtxt(f129L, delimiter="\t")
@@ -34,7 +37,7 @@ Q1 = F2[startcut1:endcut1, 3]
 dc1 = Fdat[startcut1:endcut1, 0]
 Q1 = np.abs(Q1)
 Bs1 = currs1*.875/5
-outliers1 = []
+outliers1 = [0, 1]
 
 Fdat = np.loadtxt(f1118, delimiter="\t")
 F2 = np.loadtxt(f1118L, delimiter="\t")
@@ -53,7 +56,7 @@ outliers2 = []
 Fdat = np.loadtxt(f114, delimiter="\t")
 F2 = np.loadtxt(f114L, delimiter="\t")
 startcut1 = 0
-endcut1 = -340
+endcut1 = -340#    -340 for 1/14, -2660 for 2/11
 freqs3 = Fdat[startcut1:endcut1, 2]
 runs3 = Fdat[startcut1:endcut1, 3]
 temps3 = Fdat[startcut1:endcut1, 4]
@@ -62,7 +65,7 @@ Q3 = F2[startcut1:endcut1, 3]
 dc3 = Fdat[startcut1:endcut1, 0]
 Q3 = np.abs(Q3)
 Bs3 = currs3*.875/5
-outliers3 = []
+outliers3 = [0]
 
 def segment(Bs, temp, outliers):
     start = 0
@@ -72,14 +75,17 @@ def segment(Bs, temp, outliers):
     count = 0
     if(len(outliers) != 0):
         index = outliers[0]
+    j = 0
     for i in range(0, len(Bs)):
         if(Bs[i] != startB):
             sub = temp[start:i]
             mean = np.mean(sub)
             dev = np.std(sub)/3
-            if(i != index):
+            if(j != index):
                 info.append([startB, mean, dev])
+                j += 1
             else:
+                j += 1
                 count += 1
                 if(count < len(outliers)):
                     index = outliers[count]
@@ -272,7 +278,40 @@ plt.xlabel('B (T)')
 plt.legend(loc = 'best')
 plt.show()
 
-def makeZeroOut(BList, RemList):
+RampUp1 = [False]*len(pBs1)
+RampUp1[0] = True
+for i in range(1, len(pBs1)):
+    if(np.abs(pBs1[i]) > np.abs(pBs1[i-1])):
+        RampUp1[i] = True
+RampDown1 = [not elem for elem in RampUp1]
+for i in range(0, len(pBs1)):
+    if(np.abs(pBs1[i]) < .5):
+        RampUp1[i] = False
+        RampDown1[i] = False
+        
+RampUp2 = [False]*len(pBs2)
+RampUp2[0] = True
+for i in range(1, len(pBs2)):
+    if(np.abs(pBs2[i]) > np.abs(pBs2[i-1])):
+        RampUp2[i] = True
+RampDown2 = [not elem for elem in RampUp2]
+for i in range(0, len(pBs2)):
+    if(np.abs(pBs2[i]) < .5):
+        RampUp2[i] = False
+        RampDown2[i] = False
+
+RampUp3 = [False]*len(pBs3)
+RampUp3[0] = True
+for i in range(1, len(pBs3)):
+    if(np.abs(pBs3[i]) > np.abs(pBs3[i-1])):
+        RampUp3[i] = True
+RampDown3 = [not elem for elem in RampUp3]
+for i in range(0, len(pBs3)):
+    if(np.abs(pBs3[i]) < .5):
+        RampUp3[i] = False
+        RampDown3[i] = False
+
+def makeZeroOut(BList, RemList, sigma, cat, catn):
     Dict = {}
     for i in range(0, len(BList)):
         key = np.abs(BList[i])
@@ -284,70 +323,50 @@ def makeZeroOut(BList, RemList):
             temp[1] += 1
             temp[2] = temp[0]/temp[1]
             Dict[key] = temp
-    zList = np.zeros(len(BList))
+    zList = np.zeros(0)
+    bl = np.zeros(0)
+    sl = np.zeros(0)
+    cl = []
+    cnl = []
     for i in range(0, len(BList)):
-        zList[i] = RemList[i] - Dict[np.abs(BList[i])][2]
-    return zList
+        if(Dict[np.abs(BList[i])][1] > 1):
+            zList = np.hstack((zList, RemList[i] - Dict[np.abs(BList[i])][2]))
+            bl = np.hstack((bl, np.abs(BList[i])))
+            sl = np.hstack((sl, sigma[i]))
+            cl.append(cat[i])
+            cnl.append(catn[i])
+    return zList, bl, sl, cl, cnl
 
-z1 = makeZeroOut(pBs1, Rs1)
-z2 = makeZeroOut(pBs2, Rs2)
-z3 = makeZeroOut(pBs3, Rs3)
-plt.errorbar(np.abs(pBs1), z1, yerr = Fs1, marker = '.', linewidth = 0, elinewidth=1, capsize=2, label = name1)
-plt.errorbar(np.abs(pBs2), z2, yerr = Fs2, marker = '.', linewidth = 0, elinewidth=1, capsize=2, label = name2)
+z1, b1, e1, c1, cn1 = makeZeroOut(pBs1, Rs1, Fs1, RampUp1, RampDown1)
+z2, b2, e2, c2, cn2 = makeZeroOut(pBs2, Rs2, Fs2, RampUp2, RampDown2)
+z3, b3, e3, c3, cn3 = makeZeroOut(pBs3, Rs3, Fs3, RampUp3, RampDown3)
+
+plt.errorbar(b1, z1, yerr = e1, marker = '.', linewidth = 0, elinewidth=1, capsize=2, label = name1)
+plt.errorbar(b2, z2, yerr = e2, marker = '.', linewidth = 0, elinewidth=1, capsize=2, label = name2)
 #plt.errorbar(np.abs(pBs3), z3, yerr = Fs3, marker = '.', linewidth = 0, elinewidth=1, capsize=2, label = name3)
 plt.show()
 
-plt.errorbar(np.abs(pBs3), z3, yerr = Fs3, marker = '.', linewidth = 0, elinewidth=1, capsize=2, label = name3)
+plt.errorbar(b3, z3, yerr = e3, marker = '.', linewidth = 0, elinewidth=1, capsize=2, label = name3)
 plt.show()
-
-RampUp1 = [False]*len(pBs1)
-for i in range(1, len(pBs1)):
-    if(np.abs(pBs1[i]) > np.abs(pBs1[i-1])):
-        RampUp1[i] = True
-RampDown1 = [not elem for elem in RampUp1]
-for i in range(0, len(pBs1)):
-    if(np.abs(pBs1[i]) < .5):
-        RampUp1[i] = False
-        RampDown1[i] = False
-        
-RampUp2 = [False]*len(pBs2)
-for i in range(1, len(pBs2)):
-    if(np.abs(pBs2[i]) > np.abs(pBs2[i-1])):
-        RampUp2[i] = True
-RampDown2 = [not elem for elem in RampUp2]
-for i in range(0, len(pBs2)):
-    if(np.abs(pBs2[i]) < .5):
-        RampUp2[i] = False
-        RampDown2[i] = False
-
-RampUp3 = [False]*len(pBs3)
-for i in range(1, len(pBs3)):
-    if(np.abs(pBs3[i]) >= np.abs(pBs3[i-1])):
-        RampUp3[i] = True
-RampDown3 = [not elem for elem in RampUp3]
-for i in range(0, len(pBs3)):
-    if(np.abs(pBs3[i]) < .5):
-        RampUp3[i] = False
-        RampDown3[i] = False
 
 def PMFMFit(x, a, b):
     q = ((b - x) + np.abs(b - x))/2
     return a*q**2
 
 cutoff = 1.5
-maskFM3 = (np.abs(pBs3[RampUp3]) > cutoff)
-pltXs = np.linspace(cutoff, np.max(np.abs(pBs3)), 100)
-pFM, cFM = curve_fit(PMFMFit, np.abs(pBs3[RampUp3])[maskFM3], (z3[RampUp3])[maskFM3], p0=[.001, 3.75])
+maskFM3 = (b3[c3] > cutoff)
+pltXs = np.linspace(cutoff, np.max(np.abs(b3)), 100)
+pFM, cFM = curve_fit(PMFMFit, (b3[c3])[maskFM3], (z3[c3])[maskFM3], p0=[.001, 3.75])
 pltYs3 = PMFMFit(pltXs, pFM[0], pFM[1])
 
-BsOld = np.hstack((np.abs(pBs1)[RampUp1], np.abs(pBs2)[RampUp2]))
-SignalOld = np.hstack((z1[RampUp1], z2[RampUp2]))
-SigmOld = np.hstack((Fs1[RampUp1], Fs2[RampUp2]))
+BsOld = np.hstack((b1[c1], b2[c2]))
+SignalOld = np.hstack((z1[c1], z2[c2]))
+SigmOld = np.hstack((e1[c1], e2[c2]))
 
 maskOld = (BsOld > cutoff)
 
-maskFM1 = (np.abs(pBs1[RampUp1]) > cutoff)
-maskFM2 = (np.abs(pBs2[RampUp2]) > cutoff)
+maskFM1 = (b1[c1] > cutoff)
+maskFM2 = (b2[c2] > cutoff)
 
 pFMold, cFMold = curve_fit(PMFMFit, BsOld[maskOld], SignalOld[maskOld], p0=[.001, 3.75])
 pltYsold = PMFMFit(pltXs, pFMold[0], pFMold[1])
@@ -357,37 +376,64 @@ print(np.sqrt(np.diag(cFM)))
 print(pFMold)
 print(np.sqrt(np.diag(cFMold)))
 
-plt.errorbar(np.abs(pBs1)[RampUp1], z1[RampUp1], yerr = Fs1[RampUp1], marker = 'o', linewidth = 0, elinewidth=1, capsize=2, label = name1 + ' Ramp Up', color = "red")
-plt.errorbar(np.abs(pBs1)[RampDown1], z1[RampDown1], yerr = Fs1[RampDown1], marker = 'o', linewidth = 0, elinewidth=1, capsize=2, label = name1 + ' Ramp Down', color = "blue")
-plt.errorbar(np.abs(pBs2)[RampUp2], z2[RampUp2], yerr = Fs2[RampUp2], marker = 'x', linewidth = 0, elinewidth=1, capsize=2, label = name2 + ' Ramp Up', color = "red")
-plt.errorbar(np.abs(pBs2)[RampDown2], z2[RampDown2], yerr = Fs2[RampDown2], marker = 'x', linewidth = 0, elinewidth=1, capsize=2, label = name2 + ' Ramp Down', color = "blue")
+xZ = np.linspace(0, np.max(b1))
+
+plt.errorbar(b1[c1], z1[c1], yerr = e1[c1], marker = 'o', linewidth = 0, elinewidth=1, capsize=2, label = name1 + ' Ramp Up', color = "red")
+plt.errorbar(b1[cn1], z1[cn1], yerr = e1[cn1], marker = 'o', linewidth = 0, elinewidth=1, capsize=2, label = name1 + ' Ramp Down', color = "blue")
+plt.errorbar(b2[c2], z2[c2], yerr = e2[c2], marker = 'x', linewidth = 0, elinewidth=1, capsize=2, label = name2 + ' Ramp Up', color = "red")
+plt.errorbar(b2[cn2], z2[cn2], yerr = e2[cn2], marker = 'x', linewidth = 0, elinewidth=1, capsize=2, label = name2 + ' Ramp Down', color = "blue")
 plt.plot(pltXs, -pltYsold)
 plt.plot(pltXs, pltYsold)
+plt.plot(xZ, 0*xZ, color = 'black')
 plt.ylabel('$<f_{0}>$ (Hz)')
 plt.xlabel('B (T)')
 plt.legend(loc = 'best')
 plt.show()
 
-plt.errorbar(np.abs(pBs3)[RampUp3], z3[RampUp3], yerr = Fs3[RampUp3], marker = '.', linewidth = 0, elinewidth=1, capsize=2, label = name3 + ' Ramp Up', color = "red")
-plt.errorbar(np.abs(pBs3)[RampDown3], z3[RampDown3], yerr = Fs3[RampDown3], marker = '.', linewidth = 0, elinewidth=1, capsize=2, label = name3 + ' Ramp Down', color = "blue")
+plt.errorbar(b3[c3], z3[c3], yerr = e3[c3], marker = '.', linewidth = 0, elinewidth=1, capsize=2, label = name3 + ' Ramp Up', color = "red")
+plt.errorbar(b3[cn3], z3[cn3], yerr = e3[cn3], marker = '.', linewidth = 0, elinewidth=1, capsize=2, label = name3 + ' Ramp Down', color = "blue")
 plt.plot(pltXs, -pltYs3)
 plt.plot(pltXs, pltYs3)
+plt.plot(xZ, 0*xZ, color = 'black')
 plt.ylabel('$<f_{0}>$ (Hz)')
 plt.xlabel('B (T)')
 plt.legend(loc = 'best')
 plt.show()
 
-plt.errorbar(np.abs(pBs1[RampUp1])[maskFM1], (z1[RampUp1])[maskFM1], yerr = (Fs1[RampUp1])[maskFM1], marker = 'o', linewidth = 0, elinewidth=1, capsize=2, label = name1)
-plt.errorbar(np.abs(pBs2[RampUp2])[maskFM2], (z2[RampUp2])[maskFM2], yerr = (Fs2[RampUp2])[maskFM2], marker = 'o', linewidth = 0, elinewidth=1, capsize=2, label = name2)
+plt.errorbar((b1[c1])[maskFM1], (z1[c1])[maskFM1], yerr = (e1[c1])[maskFM1], marker = 'o', linewidth = 0, elinewidth=1, capsize=2, label = name1)
+plt.errorbar((b2[c2])[maskFM2], (z2[c2])[maskFM2], yerr = (e2[c2])[maskFM2], marker = 'o', linewidth = 0, elinewidth=1, capsize=2, label = name2)
 plt.plot(pltXs, pltYsold)
 plt.ylabel('$<f_{0}>$ (Hz)')
 plt.xlabel('B (T)')
 plt.legend(loc = 'best')
 plt.show()
 
-plt.errorbar(np.abs(pBs3[RampUp3])[maskFM3], (z3[RampUp3])[maskFM3], yerr = (Fs3[RampUp3])[maskFM3], marker = 'o', linewidth = 0, elinewidth=1, capsize=2, label = name3)
+plt.errorbar((b3[c3])[maskFM3], (z3[c3])[maskFM3], yerr = (e3[c3])[maskFM3], marker = 'o', linewidth = 0, elinewidth=1, capsize=2, label = name3)
 plt.plot(pltXs, pltYs3)
 plt.ylabel('$<f_{0}>$ (Hz)')
+plt.xlabel('B (T)')
+plt.legend(loc = 'best')
+plt.show()
+
+
+plt.errorbar(b1[c1], z1[c1]/b1[c1], yerr = e1[c1]/b1[c1], marker = 'o', linewidth = 0, elinewidth=1, capsize=2, label = name1 + ' Ramp Up', color = "red")
+plt.errorbar(b1[cn1], z1[cn1]/b1[cn1], yerr = e1[cn1]/b1[cn1], marker = 'o', linewidth = 0, elinewidth=1, capsize=2, label = name1 + ' Ramp Down', color = "blue")
+plt.errorbar(b2[c2], z2[c2]/b2[c2], yerr = e2[c2]/b2[c2], marker = 'x', linewidth = 0, elinewidth=1, capsize=2, label = name2 + ' Ramp Up', color = "red")
+plt.errorbar(b2[cn2], z2[cn2]/b2[cn2], yerr = e2[cn2]/b2[cn2], marker = 'x', linewidth = 0, elinewidth=1, capsize=2, label = name2 + ' Ramp Down', color = "blue")
+plt.plot(pltXs, -pltYsold/pltXs)
+plt.plot(pltXs, pltYsold/pltXs)
+plt.plot(xZ, 0*xZ, color = 'black')
+plt.ylabel('$m$ (Hz/T)')
+plt.xlabel('B (T)')
+plt.legend(loc = 'best')
+plt.show()
+
+plt.errorbar(b3[c3], z3[c3]/b3[c3], yerr = e3[c3]/b3[c3], marker = '.', linewidth = 0, elinewidth=1, capsize=2, label = name3 + ' Ramp Up', color = "red")
+plt.errorbar(b3[cn3], z3[cn3]/b3[cn3], yerr = e3[cn3]/b3[cn3], marker = '.', linewidth = 0, elinewidth=1, capsize=2, label = name3 + ' Ramp Down', color = "blue")
+plt.plot(pltXs, -pltYs3/pltXs)
+plt.plot(pltXs, pltYs3/pltXs)
+plt.plot(xZ, 0*xZ, color = 'black')
+plt.ylabel('$m$ (Hz/T)')
 plt.xlabel('B (T)')
 plt.legend(loc = 'best')
 plt.show()
