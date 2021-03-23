@@ -378,9 +378,11 @@ AllBs, SigBase, ErrBase = correctNonHist(AllBs0, SigBase0, ErrBase0, Bfield, sig
 AllBs12, SigBase12, ErrBase12 = correctNonHist(AllBs120, SigBase120, ErrBase120, Bfield12, signal12, error12)
 AllBs2k, SigBase2k, ErrBase2k = correctNonHist(AllBs2k0, SigBase2k0, ErrBase2k0, Bfield2k, signal2k, error2k)
 
-plt.errorbar(AllBs, SigBase, yerr = ErrBase, marker = '.', linewidth = 0, elinewidth=1, capsize=2, color = 'black', label = '4kOhm, Run 1')
-plt.errorbar(AllBs12, SigBase12, yerr = ErrBase12, marker = '.', linewidth = 0, elinewidth=1, capsize=2, color = 'red', label = '4kOhm, Run 2')
-plt.errorbar(AllBs2k, SigBase2k, yerr = ErrBase2k, marker = '.', linewidth = 0, elinewidth=1, capsize=2, color = 'blue', label = '2kOhm')
+a = a*.9
+
+plt.errorbar(AllBs, SigBase - 1.3 - a*s0*AllBs, yerr = ErrBase, marker = '.', linewidth = 0, elinewidth=1, capsize=2, color = 'black', label = '4kOhm, Run 1')
+plt.errorbar(AllBs12, SigBase12 - 1.6 - a*s1*AllBs12, yerr = ErrBase12, marker = '.', linewidth = 0, elinewidth=1, capsize=2, color = 'red', label = '4kOhm, Run 2')
+plt.errorbar(AllBs2k, SigBase2k - 2.0 - a*s2*AllBs2k, yerr = ErrBase2k, marker = '.', linewidth = 0, elinewidth=1, capsize=2, color = 'blue', label = '2kOhm')
 plt.xlabel('Magnetic Field (T)')
 plt.ylabel('Non-Hist $\delta f_{0}(\pm V)$ (mHz)')
 plt.legend(loc= "best")
@@ -427,14 +429,34 @@ plt.ylabel('R-Scaled Odd Base $\delta f_{0}(\pm V)$ (mHz)')
 plt.legend(loc = 'best')
 plt.show()
 
-a = a*.9
-plt.errorbar(OBsB, OHSigB - a*s0*OBsB, yerr = OHUncB, marker = '.', linewidth = 0, elinewidth=1, capsize=2, color = 'black', label = '4kOhm, Run 1')
-plt.errorbar(OBsB12, OHSigB12 - a*s1*OBsB12, yerr = OHUncB12, marker = '.', linewidth = 0, elinewidth=1, capsize=2, color = 'red', label = '4kOhm, Run 2')
-plt.errorbar(OBsB2k, OHSigB2k - a*s2*OBsB2k, yerr = OHUncB2k, marker = '.', linewidth = 0, elinewidth=1, capsize=2, color = 'blue', label = '2kOhm')
+#plt.errorbar(OBsB, OHSigB - a*s0*OBsB, yerr = OHUncB, marker = '.', linewidth = 0, elinewidth=1, capsize=2, color = 'black', label = '4kOhm, Run 1')
+plt.errorbar(OBsB12, OHSigB12 - a*s1*OBsB12, yerr = OHUncB12, marker = '.', linewidth = 0, elinewidth=1, capsize=2, color = 'red', label = '4kOhm, Run 2, odd')
+#plt.errorbar(OBsB2k, OHSigB2k - a*s2*OBsB2k, yerr = OHUncB2k, marker = '.', linewidth = 0, elinewidth=1, capsize=2, color = 'blue', label = '2kOhm')
+plt.errorbar(EBsB12, EHSigB12 - 1.6, yerr = EHUncB12, marker = '.', linewidth = 0, elinewidth=1, capsize=2, color = 'green', label = '4kOhm, Run 2, even')
 plt.xlabel('Magnetic Field (T)')
 plt.ylabel('Nonlinear Odd Component (mHz)')
 plt.legend(loc = 'best')
 plt.show()
+
+plt.errorbar(OBsB, OHSigB - a*s0*OBsB, yerr = OHUncB, marker = '.', linewidth = 0, elinewidth=1, capsize=2, color = 'black', label = '4kOhm, Run 1, odd')
+#plt.errorbar(OBsB12, OHSigB12 - a*s1*OBsB12, yerr = OHUncB12, marker = '.', linewidth = 0, elinewidth=1, capsize=2, color = 'red', label = '4kOhm, Run 2, odd')
+#plt.errorbar(OBsB2k, OHSigB2k - a*s2*OBsB2k, yerr = OHUncB2k, marker = '.', linewidth = 0, elinewidth=1, capsize=2, color = 'blue', label = '2kOhm')
+plt.errorbar(EBsB, EHSigB - 1.3, yerr = EHUncB, marker = '.', linewidth = 0, elinewidth=1, capsize=2, color = 'green', label = '4kOhm, Run 1, even')
+plt.xlabel('Magnetic Field (T)')
+plt.ylabel('Nonlinear Odd Component (mHz)')
+plt.legend(loc = 'best')
+plt.show()
+
+
+#plt.errorbar(OBsB, OHSigB - a*s0*OBsB, yerr = OHUncB, marker = '.', linewidth = 0, elinewidth=1, capsize=2, color = 'black', label = '4kOhm, Run 1')
+#plt.errorbar(OBsB12, OHSigB12 - a*s1*OBsB12, yerr = OHUncB12, marker = '.', linewidth = 0, elinewidth=1, capsize=2, color = 'red', label = '4kOhm, Run 2, odd')
+plt.errorbar(OBsB2k, OHSigB2k - a*s2*OBsB2k, yerr = OHUncB2k, marker = '.', linewidth = 0, elinewidth=1, capsize=2, color = 'blue', label = '2kOhm, odd')
+plt.errorbar(EBsB2k, EHSigB2k - 2, yerr = EHUncB2k, marker = '.', linewidth = 0, elinewidth=1, capsize=2, color = 'green', label = '2kOhm, even')
+plt.xlabel('Magnetic Field (T)')
+plt.ylabel('Nonlinear Odd Component (mHz)')
+plt.legend(loc = 'best')
+plt.show()
+
 
 def segment(Bs, temp, outliers):
     start = 0
@@ -622,7 +644,7 @@ def GetFs(infoF1, infoF2, infoF3, infoQ1, infoQ2, infoQ3, TrueTs):
 global N
 global NT
 global NQ
-N = 5
+N = 7
 NT = 2
 NQ = 2
 
