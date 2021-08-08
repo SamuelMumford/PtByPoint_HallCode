@@ -11,7 +11,6 @@ import math
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from scipy.optimize import curve_fit
-from scipy.interpolate import interp1d
 
 def FF(x, a, b, c):
     Vs = x[:, 0]
@@ -77,16 +76,29 @@ def Opa(a, h, asi, hsi, b):
         if(-b[i] in b):
             if(np.abs(b[i]) in ob):
                 j = ob.index(np.abs(b[i]))
-                oh[j] += h[i]*np.sign(b[i])/4
+                oh[j] += h[i]*np.sign(b[i])/2
                 ohv[j] += hsi[i]**2/2
             else:
                 ob = ob + [np.abs(b[i])]
                 oh = oh + [h[i]*np.sign(b[i])/2]
-                ohv = ohv + [hsi[i]**2/4]
+                ohv = ohv + [hsi[i]**2/2]
     ohsi = [np.sqrt(l) for l in ohv]
-    return ob, oh, ohsi            
+    return np.array(ob), np.array(oh), np.array(ohsi)      
 
-def Hall(fname, startcut):
+def postFilter(ob, oh, ohsi, a, b):
+    tol = 2
+    filt = (ohsi < tol)
+    return ob[filt], oh[filt], ohsi[filt], a[filt], b[filt]
+
+fname = '/home/sam/Documents/HallCool/3_18_21_pump1.txt'
+startcut = 100
+fnameW = '/home/sam/Documents/HallCool/3_17_21_t1.txt'
+startcutW = 20
+
+fnameA, startcutA, label6 = '/home/sam/Documents/4_10_cooldown/4_10_21_t1.txt', 40, 'Anneal 2, 6.5 K'
+fnameA4, startcutA4, label4 = '/home/sam/Documents/4_10_cooldown/4_11_21_pumpB.txt', 200, 'Anneal 2, 3.5 K'
+
+def makeHallData(fname, startcut):
     Fdat = np.loadtxt(fname, delimiter="\t")
     startcut *= 10
     endcut =-1
@@ -99,16 +111,13 @@ def Hall(fname, startcut):
     #ampsH = Fdat[startcut:endcut, 3]/np.cos(PhsH)
     ts = Fdat[startcut:endcut, -1]
     
-    colors = cm.jet(np.linspace(0, 1, len(Bs)))
-    
     data = np.vstack((amps, Bs)).T
     p0 = (.022, 0, 0)
     popt,pcov=curve_fit(FF, data, ampsH, p0=p0)
     test = FF(data, popt[0], popt[1], popt[2])
     
-    
     pollute = FF(data, popt[0], 0, popt[2])
-    
+
     aParts, hParts, asParts, hsParts, BsL = secSplit(Bs, amps, ampsH)
     dataBin = np.vstack((aParts, BsL)).T
     polluteBin = FF(dataBin, popt[0], 0, popt[2])
@@ -118,42 +127,71 @@ def Hall(fname, startcut):
     DD = np.vstack((PD, BD)).T
     Sign = FF(DD, 0, popt[1], 0)
     
-    colors = cm.jet(np.linspace(0, 1, len(BsL)))
-    #plt.errorbar(BsL, hParts-polluteBin, hsParts, marker = '.', linewidth = 0, elinewidth=1)
-    
     a, h, asi, hsi, b = consolidate(aParts, hParts-polluteBin, asParts, hsParts, BsL)
     ob, oh, ohsi = Opa(a, h, asi, hsi, b)
     pl,plc=curve_fit(Fl, ob, oh, p0=(0), sigma = ohsi)
-    blin = np.linspace(0, np.amax(ob))
+    blin = ob#np.linspace(0, np.amax(ob))
     Hfit = pl[0]*blin
-    
-    return ob, oh, ohsi, BsL, (hParts - polluteBin), pl[0], colors
+    cf = (5E6)
+    oh *= cf
+    ohsi *= cf
+    Hfit *= cf
+    cd = 1/(pl[0]*5E-8*cf*1.6E-19)
+    uncCd = np.sqrt(np.diag(plc)[0])/(pl[0]**2*(5E-8*cf*1.6E-19))
+    print(np.sqrt(np.diag(plc)[0])/pl[0])
+    return ob, oh, ohsi, blin, Hfit, cd*1E-6, uncCd*1E-6
 
-fname, startcut = '/home/sam/Documents/3_18_cooldown/3_17_21_t1.txt', 65
-#fname = '/home/sam/Documents/3_18_cooldown/3_17_21_t3.txt'
-fname4, startcut4 = '/home/sam/Documents/3_18_cooldown/3_18_21_pump1.txt', 100
+obC1, ohC1, ohsiC1, blinC1, HfitC1, cdC1, uncCdC1 = makeHallData(fname, startcut)
+obW1, ohW1, ohsiW1, blinW1, HfitW1, cdW1, uncCdW1 = makeHallData(fnameW, startcutW)
 
-ob, oh, ohsi, BsL, hrem, fit, colors = Hall(fname, startcut)
-ob4, oh4, ohsi4, BsL4, hrem4, fit4, colors4 = Hall(fname4, startcut4)
+obC2, ohC2, ohsiC2, blinC2, HfitC2, cdC2, uncCdC2 = makeHallData(fnameA4, startcutA4)
+obW2, ohW2, ohsiW2, blinW2, HfitW2, cdW2, uncCdW2 = makeHallData(fnameA, startcutA)
+obC2, ohC2, ohsiC2, blinC2, HfitC2 = postFilter(obC2, ohC2, ohsiC2, blinC2, HfitC2)
 
-blin - np.linspace(min(ob), max(ob))
-Hfit = fit*blin
-Hfit4 = fit4*blin
+print(str(cdC1) + ' +- ' + str(uncCdC1))
+print(str(cdW1) + ' +- ' + str(uncCdW1))
+print(str(cdC2) + ' +- ' + str(uncCdC2))
+print(str(cdW2) + ' +- ' + str(uncCdW2))
 
-plt.errorbar(ob, oh, ohsi, marker = '.', linewidth = 0, elinewidth=1)
-plt.plot(blin, Hfit)
-plt.errorbar(ob4, oh4, ohsi4, marker = '.', linewidth = 0, elinewidth=1)
-plt.plot(blin, Hfit4)
-plt.xlabel('B Field (T)')
-plt.ylabel('V_{xy}')
+plt.errorbar(obW1, ohW1, ohsiW1, fmt='o', color='r', markersize=5, label = 'Anneal 1, 6.5 K')
+plt.plot(blinW1, HfitW1, color = 'k')
+plt.errorbar(obC1, ohC1, ohsiC1, fmt='x', color='r', markersize=5, label = 'Anneal 1, 3.5 K')
+plt.plot(blinC1, HfitC1, color = 'k')
+
+plt.errorbar(obW2, ohW2, ohsiW2, fmt='o', color='b', markersize=5, label = 'Anneal 2, 6.5 K')
+plt.plot(blinW2, HfitW2, color = 'k')
+plt.errorbar(obC2, ohC2, ohsiC2, fmt='x', color='b', markersize=5, label = 'Anneal 2, 3.5 K')
+plt.plot(blinC2, HfitC2, color = 'k')
+
+plt.xlabel('|B| (T)')
+plt.ylabel(r'$R_{xy}$ ($\Omega$)')
+plt.legend(loc = 'best', prop={'size':10})
+#plt.savefig('/home/sam/Documents/DriftTests/HallPlot.pdf', bbox_inches="tight")
 plt.show()
-    
-plt.errorbar(ob, oh-np.array(ob)*fit, ohsi, marker = '.', linewidth = 0, elinewidth=1)
-plt.errorbar(ob4, oh4-np.array(ob4)*fit4, ohsi4, marker = '.', linewidth = 0, elinewidth=1)
-plt.xlabel('B Field (T)')
-plt.ylabel('Resid Amp (V)')
+
+plt.errorbar(obW1, ohW1-HfitW1, ohsiW1, fmt='o', color='r', markersize=5, label = 'Anneal 1, 6.5 K')
+plt.xlabel('|B| (T)')
+plt.ylabel(r'$\delta R_{xy}$ ($\Omega$)')
+plt.legend(loc = 'best', prop={'size':10})
+#plt.savefig('/home/sam/Documents/DriftTests/HallPlot.pdf', bbox_inches="tight")
+plt.show()
+plt.errorbar(obC1, ohC1-HfitC1, ohsiC1, fmt='x', color='r', markersize=5, label = 'Anneal 1, 3.5 K')
+plt.xlabel('|B| (T)')
+plt.ylabel(r'$\delta R_{xy}$ ($\Omega$)')
+plt.legend(loc = 'best', prop={'size':10})
+#plt.savefig('/home/sam/Documents/DriftTests/HallPlot.pdf', bbox_inches="tight")
 plt.show()
 
-rat = 2.517E20/1.8641E-6
-print(fit*rat)
-print(fit4*rat)
+plt.errorbar(obW2, ohW2-HfitW2, ohsiW2, fmt='o', color='b', markersize=5, label = 'Anneal 2, 6.5 K')
+plt.xlabel('|B| (T)')
+plt.ylabel(r'$\delta R_{xy}$ ($\Omega$)')
+plt.legend(loc = 'best', prop={'size':10})
+#plt.savefig('/home/sam/Documents/DriftTests/HallPlot.pdf', bbox_inches="tight")
+plt.show()
+plt.errorbar(obC2, ohC2-HfitC2, ohsiC2, fmt='x', color='b', markersize=5, label = 'Anneal 2, 3.5 K')
+
+plt.xlabel('|B| (T)')
+plt.ylabel(r'$\delta R_{xy}$ ($\Omega$)')
+plt.legend(loc = 'best', prop={'size':10})
+#plt.savefig('/home/sam/Documents/DriftTests/HallPlot.pdf', bbox_inches="tight")
+plt.show()
